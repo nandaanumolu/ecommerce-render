@@ -5,9 +5,14 @@ class PromotionalCodeCreate(BaseModel):
     promoValidationdate: str
     promoWorth: int
 
-class EmailBody(BaseModel):
+class EmailBodyParticularUsers(BaseModel):
     EmailSubject:str
-    customerEmails:list[str]
+    CustomerEmails:list
+
+class EmailBodyAllUsers(BaseModel):
+    EmailSubject:str
+    
+
 
 class SMSBody(BaseModel):
     smsContent:str

@@ -14,7 +14,7 @@ from db.models.promocodes import PromoCodes
 from db.models.user import User
 
 from models.product import ProductCreate
-from models.promocode import PromotionalCodeCreate,EmailBody,SMSBody
+from models.promocode import PromotionalCodeCreate,EmailBodyParticularUsers, EmailBodyAllUsers,SMSBody
 
 from db.session import get_db,get_engine
 adminRouter = APIRouter()
@@ -99,10 +99,10 @@ def send_email(subject, recipient_emails):
         return False
     
 
-@adminRouter.post("/sendEmail")
-async def sendEmailAlert(emailDetails:EmailBody):
+@adminRouter.post("/sendEmailParticularUsers")
+async def sendEmailAlert(emailDetails:EmailBodyParticularUsers):
     try:
-        for email in emailDetails.customerEmails:
+        for email in emailDetails.CustomerEmails:
             success = send_email(emailDetails.EmailSubject, email)
             if not success:
                 raise HTTPException(status_code=500, detail=f"Failed to send email to {email}.")
@@ -110,13 +110,14 @@ async def sendEmailAlert(emailDetails:EmailBody):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@adminRouter.post("/sendEmail")
-async def sendEmailAlertToAll(emailDetails:EmailBody):
+@adminRouter.post("/sendEmailToAll")
+async def sendEmailAlertToAll(emailDetails:EmailBodyAllUsers):
     db = Session()
     #with Session(engine) as db:
     try:
-        user=db.query(User).all()
-        for email in user.email:
+        users_list=db.query(User).all()
+        user_emails = [user.email for user in users_list]
+        for email in user_emails:
                 success = send_email(emailDetails.EmailSubject, email)
         if not success:
             raise HTTPException(status_code=500, detail=f"Failed to send email to {email}.")  
