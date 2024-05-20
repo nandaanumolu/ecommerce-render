@@ -3,14 +3,14 @@ import uuid
 from sqlalchemy import Column, Integer, String, Text
 #from sqlalchemy.orm import declarative_base
 from datetime import datetime
-from app.db.models.user import Base
+from db.models.user import Base
 #ddressBase = declarative_base()
 import sys
 import os
 
 # Add the path to the top-level directory of your project
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../' )))
-from app.db.session import SessionLocal
+from db.session import SessionLocal
 
 db=SessionLocal()
 

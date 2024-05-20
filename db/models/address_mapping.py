@@ -12,8 +12,8 @@ from sqlalchemy.orm import relationship
 
 #addressBase = declarative_base()
 
-from app.db.session import SessionLocal
-from app.db.models.user import Base
+from db.session import SessionLocal
+from db.models.user import Base
 
 db=SessionLocal()
 
