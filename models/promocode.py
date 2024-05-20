@@ -7,7 +7,7 @@ class PromotionalCodeCreate(BaseModel):
 
 class EmailBody(BaseModel):
     EmailSubject:str
-    customerEmail:str
+    customerEmails:list[str]
 
 class SMSBody(BaseModel):
     smsContent:str

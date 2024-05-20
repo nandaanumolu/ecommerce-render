@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends,FastAPI, UploadFile
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker 
+
 from db.models.product import Product
 from fastapi import Form
 
@@ -9,6 +11,8 @@ from sendgrid.helpers.mail import Mail
 from twilio.rest import Client
 
 from db.models.promocodes import PromoCodes
+from db.models.user import User
+
 from models.product import ProductCreate
 from models.promocode import PromotionalCodeCreate,EmailBody,SMSBody
 
@@ -17,14 +21,8 @@ adminRouter = APIRouter()
 
 # Pydantic model for product creation request
 engine=get_engine()
+Session = sessionmaker(bind=engine) 
 
-# Function to add product
-def add_product(db, product: Product, image: bytes):
-    db.add(product)
-    db.commit()
-    db.refresh(product)
-    product.productImage = image
-    return product
 
 # FastAPI endpoint to add product
 @adminRouter.post("/products")
@@ -32,6 +30,7 @@ async def create_product(productName:str=Form(...),
     productDescription:str=Form(...),
     productCost:str=Form(...),
     productRating:str=Form(...), productImage: UploadFile = UploadFile(...) ):
+    db = Session()
     with Session(engine) as db:
         try:
             productId=Product.generate_unique_id()
@@ -58,55 +57,75 @@ async def create_product(productName:str=Form(...),
 
 @adminRouter.post("/promotional-codes")
 async def create_promotional_code(promo_data: PromotionalCodeCreate):
-    with Session(engine) as db:
-        try:
-            promoId=PromoCodes.generate_unique_id()
-            new_promo = PromoCodes(**promo_data.dict(),promoId=promoId)
-            db.add(new_promo)
-            db.commit()
-            db.refresh(new_promo)
-            return {"message": "Promotional code added successfully", "promo_id": new_promo.promoId}
-        except Exception as e:
-            db.rollback()
-            raise e
-        finally:
-            db.close()
+    #with Session(engine) as db:
+    db = Session()
+    try:
+        promoId=PromoCodes.generate_unique_id()
+        new_promo = PromoCodes(**promo_data.dict(),promoId=promoId)
+        db.add(new_promo)
+        db.commit()
+        db.refresh(new_promo)
+        return {"message": "Promotional code added successfully", "promo_id": new_promo.promoId}
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
 
-def send_email(subject, recipient_email):
-
+def send_email(subject, recipient_emails):
     html_file_path = "email_content/index.html"
     # Set SendGrid API key
     api_key = os.environ.get('SENDGRID')
-
+    if not api_key:
+        raise ValueError("SendGrid API key is not set in the environment variables.")
     # Initialize SendGrid client
     sg = SendGridAPIClient(api_key)
-
     # Read HTML file content
     with open(html_file_path, 'r') as file:
         html_content = file.read()
-
     # Create Mail object
     message = Mail(
         from_email='nandakishore087@gmail.com',
-        to_emails=recipient_email,
+        to_emails=recipient_emails,
         subject=subject,
         html_content=html_content
     )
-
     # Send message
     try:
         response = sg.send(message)
         return True
     except Exception as e:
+        print(f"Error sending email: {e}")
         return False
+    
 
 @adminRouter.post("/sendEmail")
 async def sendEmailAlert(emailDetails:EmailBody):
     try:
-        send_email(emailDetails.EmailSubject, emailDetails.customerEmail)
-
+        for email in emailDetails.customerEmails:
+            success = send_email(emailDetails.EmailSubject, email)
+            if not success:
+                raise HTTPException(status_code=500, detail=f"Failed to send email to {email}.")
+        return {"message": "Emails sent successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@adminRouter.post("/sendEmail")
+async def sendEmailAlertToAll(emailDetails:EmailBody):
+    db = Session()
+    #with Session(engine) as db:
+    try:
+        user=db.query(User).all()
+        for email in user.email:
+                success = send_email(emailDetails.EmailSubject, email)
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to send email to {email}.")  
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    return {"message": "Emails sent successfully"}
+
 
 
 @adminRouter.post("/sendSMS")
