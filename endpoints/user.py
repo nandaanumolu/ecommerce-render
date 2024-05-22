@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker 
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 from models.user import UserCreate
 from models.cart import CartCreate,CartRemove,EditCart
@@ -63,7 +62,7 @@ def signup( request: Request,user: UserCreate):
             validatedUser=getProfileDetails(uId,db)
             return validatedUser
     except Exception as e:
-        db.rollback()
+        #db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
@@ -78,7 +77,7 @@ def login(user:UserLogin):
         validUserFlag=User.verify_password(user.password,userHashedPassword)
         if(validUserFlag):
             print("nanda anumolu")
-            validatedUser=getProfileDetails(DBuser.userId)
+            validatedUser=getProfileDetails(DBuser.userId,db)
             return {"validUser":validatedUser}
         else:
             return {"validUser":validUserFlag}
@@ -96,6 +95,7 @@ async def get_all_products():
         products = db.query(Product).all()
         for product in products:
             if product.productImage:
+                print(product.productImage,"image*")
                 product.productImage = base64.b64encode(product.productImage).decode('utf-8')
         return products
     except Exception as e:
@@ -134,7 +134,7 @@ async def add_to_cart(cart: CartCreate):
         return {"message":"Added to cart successfully","cartId":cId}
     
     except Exception as e:
-        db.rollback()
+        ##db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
@@ -150,7 +150,7 @@ async def edit_cart(cart:EditCart):
         db.commit()
         db.refresh(cart_items)
     except Exception as e:
-        db.rollback()
+        ##db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     return {"message":"successfully cart has been modified","cartId":cart_items.cartId}
 
@@ -171,7 +171,7 @@ async def remove_from_cart(cart: CartRemove):
         return {"message": "Cart items removed successfully", "cartId": cart.cartId}
     
     except Exception as e:
-        db.rollback()
+        #db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
@@ -191,7 +191,7 @@ async def edit_order(Editorder: editOrder):
         
         return {"message": "successfully edited order", "cartId": Editorder.orderId}
     except Exception as e:
-        db.rollback()
+        #db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
@@ -203,8 +203,6 @@ async def get_all_promocodes():
     try:
         promocodes = db.query(PromoCodes).all()
         return promocodes
-    except SQLAlchemyError as e:
-        db.rollback()  # Rollback the session in case of error
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -308,6 +306,7 @@ def getProfileDetails(userId: int,db):
             allItemsInOrder=[]
             for item in orderItems:
                 product=db.query(Product).filter(Product.productId == item.productId).first()
+                ImageBytes=None
                 if product.productImage:
                     ImageBytes = base64.b64encode(product.productImage).decode('utf-8')
                 info={
@@ -323,9 +322,13 @@ def getProfileDetails(userId: int,db):
         cartInfo=[]
         for item in cartDetails:
             product=db.query(Product).filter(Product.productId == item.productId).first()
+            ImageBytes=None
+            if product.productImage:
+                ImageBytes = base64.b64encode(product.productImage).decode('utf-8')
             info={
+                "cartId":item.cartId,
                 "ProductName":product.productName,
-                "ProductImage":product.productImage,
+                "ProductImage":ImageBytes,
                 "ProductQuantity":item.quantity,
                 "ProductCost":item.quantity*product.productCost   
             }
@@ -370,8 +373,8 @@ async def paymentVerification(razorpay:PaymentVerify):
         db.commit()
         db.refresh(edit_payment_status)
 
-    except SQLAlchemyError as e:
-        db.rollback()  # Rollback the session in case of error
+    # except SQLAlchemyError as e:
+    #     #db.rollback()  # Rollback the session in case of error
 
     except Exception as e:
         if(edit_payment_status):
@@ -382,7 +385,7 @@ async def paymentVerification(razorpay:PaymentVerify):
             db.refresh(edit_payment_status)
             print(edit_payment_status.paymentStatus)
 
-        db.rollback()           
+        #db.rollback()           
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:
