@@ -31,29 +31,29 @@ async def create_product(productName:str=Form(...),
     productCost:str=Form(...),
     productRating:str=Form(...), productImage: UploadFile = UploadFile(...) ):
     db = Session()
-    with Session(engine) as db:
-        try:
-            productId=Product.generate_unique_id()
-            # Read image file
-            image_bytes = await productImage.read()
-            # Create product instance
-            new_product = Product(productName=productName,
-                                productDescription=productDescription,
-                                productCost=productCost,
-                                productRating=productRating, 
-                                productId=productId,
-                                productImage=image_bytes)
-            # Add product to database
-            #created_product = add_product(db, new_product, image_bytes)
-            db.add(new_product)
-            db.commit()
-            db.refresh(new_product)
-            return {"message": "Product added successfully", "product_id": new_product.productId}
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            db.close()
+    #with Session(engine) as db:
+    try:
+        productId=Product.generate_unique_id()
+        # Read image file
+        image_bytes = await productImage.read()
+        # Create product instance
+        new_product = Product(productName=productName,
+                            productDescription=productDescription,
+                            productCost=productCost,
+                            productRating=productRating, 
+                            productId=productId,
+                            productImage=image_bytes)
+        # Add product to database
+        #created_product = add_product(db, new_product, image_bytes)
+        db.add(new_product)
+        db.commit()
+        db.refresh(new_product)
+        return {"message": "Product added successfully", "product_id": new_product.productId}
+    except Exception as e:
+        #db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 @adminRouter.post("/promotional-codes")
 async def create_promotional_code(promo_data: PromotionalCodeCreate):
@@ -67,7 +67,7 @@ async def create_promotional_code(promo_data: PromotionalCodeCreate):
         db.refresh(new_promo)
         return {"message": "Promotional code added successfully", "promo_id": new_promo.promoId}
     except Exception as e:
-        db.rollback()
+        #db.rollback()
         raise e
     finally:
         db.close()
