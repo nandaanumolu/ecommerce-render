@@ -78,7 +78,7 @@ def login(user:UserLogin):
         validUserFlag=User.verify_password(user.password,userHashedPassword)
         if(validUserFlag):
             print("nanda anumolu")
-            validatedUser=getProfileDetails(DBuser.userId)
+            validatedUser=getProfileDetails(DBuser.userId,db)
             return {"validUser":validatedUser}
         else:
             return {"validUser":validUserFlag}
@@ -214,81 +214,83 @@ async def get_all_promocodes():
 @router.post("/createOrder")
 async def createUserOrder(order:createOrder):
     load_dotenv()
-    with Session(engine) as db:
-        try:      
-            oId=Order.generate_unique_id()
-            new_order = Order(userId=order.userId,orderId=oId,orderStatus=None,
-                            paymentId=None, Amount=None,promoCodeId=None,paymentStatus=None,currency=order.currency)
+    db= Session() 
+    try:      
+        oId=Order.generate_unique_id()
+        new_order = Order(userId=order.userId,orderId=oId,orderStatus=None,
+                        paymentId=None, Amount=None,promoCodeId=None,paymentStatus=None,currency=order.currency)
+        
+        AId=Address.generate_unique_id()
+        new_address = Address(name=order.name,
+                                mobileNumber=order.mobileNumber,
+                                pincode= order.pincode,
+                                locality=order.locality,
+                                address=order.address,
+                                city=order.city,
+                                alternatePhonenumber=order.alternatePhonenumber,
+                                addressId=AId)
+        # new_order = Order(userId=order.userId,orderId=oId,addressMappingId=order.addressMappingId)
+        db.add(new_order)
+        db.add(new_address)
+        db.commit()
+        db.refresh(new_order)
+        db.refresh(new_address)
+        print("order")
+        # amount=0
+        # productDetails=[]
+        for pid,quantity in order.productIds.items():
+            oIId=OrderItem.generate_unique_id()
+            product_cost=db.query(Product).filter(Product.productId == int(pid)).first()      
+            if not product_cost:
+                raise HTTPException(status_code=404, detail="product not found")
             
-            AId=Address.generate_unique_id()
-            new_address = Address(name=order.name,
-                                    mobileNumber=order.mobileNumber,
-                                    pincode= order.pincode,
-                                    locality=order.locality,
-                                    address=order.address,
-                                    city=order.city,
-                                    alternatePhonenumber=order.alternatePhonenumber,
-                                    addressId=AId)
-            # new_order = Order(userId=order.userId,orderId=oId,addressMappingId=order.addressMappingId)
-            db.add(new_order)
-            db.add(new_address)
+            #product_name=product_cost.productName
+            new_order_item = OrderItem(orderId=oId,productId=pid,quantity=quantity,orderItemId=oIId,price=int(quantity)*product_cost.productCost)
+            db.add(new_order_item)
             db.commit()
-            db.refresh(new_order)
-            db.refresh(new_address)
-            print("order")
-            # amount=0
-            # productDetails=[]
-            for pid,quantity in order.productIds.items():
-                oIId=OrderItem.generate_unique_id()
-                product_cost=db.query(Product).filter(Product.productId == int(pid)).first()      
-                if not product_cost:
-                    raise HTTPException(status_code=404, detail="product not found")
-                
-                #product_name=product_cost.productName
-                new_order_item = OrderItem(orderId=oId,productId=pid,quantity=quantity,orderItemId=oIId,price=int(quantity)*product_cost.productCost)
-                db.add(new_order_item)
-                db.commit()
-                db.refresh(new_order_item)  
-                #amount=amount+(product_cost.productCost*int(quantity))
-                #productDetails.append({product_name:new_order_item.price})
-            #updating amount in the order
+            db.refresh(new_order_item)  
+            #amount=amount+(product_cost.productCost*int(quantity))
+            #productDetails.append({product_name:new_order_item.price})
+        #updating amount in the order
 
-            edit_order_amount=db.query(Order).filter(Order.orderId == oId).first()
-            
-            if not edit_order_amount:
-                raise HTTPException(status_code=404, detail="order not found")
-            edit_order_amount.Amount=order.amount
-            db.add(edit_order_amount)
-            db.commit()
-            db.refresh(edit_order_amount)
-            
-            razor_id=os.getenv("razor_id")
-            razor_secret_id=os.getenv('razor_secret_id')
-            client = razorpay.Client(auth=(razor_id, razor_secret_id))
-            DATA = {
-                "amount": order.amount,
-                "currency": "INR",
-                "receipt": "receipt#1",
-                "notes": {
-                    "key1": "value3",
-                    "key2": "value2"
-                }
+        edit_order_amount=db.query(Order).filter(Order.orderId == oId).first()
+        
+        if not edit_order_amount:
+            raise HTTPException(status_code=404, detail="order not found")
+        edit_order_amount.Amount=order.amount
+        db.add(edit_order_amount)
+        db.commit()
+        db.refresh(edit_order_amount)
+        
+        razor_id=os.getenv("razor_id")
+        razor_secret_id=os.getenv('razor_secret_id')
+        client = razorpay.Client(auth=(razor_id, razor_secret_id))
+        DATA = {
+            "amount": order.amount,
+            "currency": "INR",
+            "receipt": "receipt#1",
+            "notes": {
+                "key1": "value3",
+                "key2": "value2"
             }
-            response=client.order.create(data=DATA)
-            if not response:
-                raise HTTPException(status_code=404, detail="Razorpay order not created")
-            
-            return {"message":"New order created successfully","orderId":oId,"Razorpay_orderId":response["id"]}
+        }
+        response=client.order.create(data=DATA)
+        if not response:
+            raise HTTPException(status_code=404, detail="Razorpay order not created")
+        
+        return {"message":"New order created successfully","orderId":oId,"Razorpay_orderId":response["id"]}
 
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            db.close()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 
 def getProfileDetails(userId: int,db):
     # db = Session() 
     #with Session(engine) as db:
+    print("is therer")
     try:
         print("Try block")
         userDetails=db.query(User).filter(User.userId == userId).first()
